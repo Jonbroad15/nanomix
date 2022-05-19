@@ -18,7 +18,7 @@ class ReferenceAtlas:
     def __init__(self, gr):
         self.cpg_ids = [(chrom, start, end) for chrom, start, end in\
                         zip(gr.Chromosome, gr.Start, gr.End)]
-        cell_types = list(gr.columns)[3:]
+        cell_types = set(gr.columns) - {'Chromosome', 'Start', 'End', 'type'}
         self.K = len(cell_types)
         self.v = {k:list(gr[k]) for k in cell_types}
         self.A = np.array(gr.loc[:, cell_types])
@@ -101,31 +101,19 @@ def get_sample_name(s):
     s = s.split('.')[0]
     return s
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--atlas', type=str,
-            default='/.mounts/labs/simpsonlab/users/jbroadbent/code/cfdna/nanopore_cfdna/atlases/meth_atlas.csv')
-    parser.add_argument('--name', type=str, default='sample1')
-    parser.add_argument('--model', default='llse', type=str, help='deconvolution model options: [nnml, llse]')
-    parser.add_argument('input', nargs='+',
-                        help='reference_modifications.tsv file')
-    parser.add_argument('-o')
-    parser.add_argument('--epsilon', default=0.05, type=float)
-    parser.add_argument('--fill', action='store_true')
-    args = parser.parse_args()
-
+def deconvolve(methylomes, atlas, model, epsilon):
     Y = []
-    sample_name = []
+    sample_names = []
     columns={'chromosome':'Chromosome',
                             'start':'Start',
                             'end':'End'}
-    df_atlas = pd.read_csv(args.atlas, sep='\t').rename(columns=columns)
+    df_atlas = pd.read_csv(atlas, sep='\t').rename(columns=columns)
     df_atlas.drop_duplicates(inplace=True)
     gr_atlas = pr.PyRanges(df_atlas).sort()
-    for input_file in args.input:
-        # read input data from mbtools
+    for methylome in methylomes:
+        # read methylomes data from mbtools
         try:
-            df = pd.read_csv(input_file, sep='\t').rename(columns=columns)
+            df = pd.read_csv(methylome, sep='\t').rename(columns=columns)
         except pd.errors.EmptyDataError:
             continue
         df.drop_duplicates(inplace=True)
@@ -138,16 +126,81 @@ def main():
         xhat = np.array(gr.modification_frequency)
         t = np.array(gr.num_called_reads)
         m = np.rint((t * xhat))
-        sample_name.append(get_sample_name(input_file))
-        s = Sample(args.name, xhat, m, t)
+        sample_name.append(get_sample_name(methylome))
+        s = Sample(name, xhat, m, t)
 
         # Run
-        if args.model == 'nnls':
+        if model == 'nnls':
             Y.append(fit_nnls(atlas, s))
         else:
-            Y.append(fit_llse(atlas, s, args.epsilon))
-    # output
-    print("\t".join(['ct'] + sample_name))
+            Y.append(fit_llse(atlas, s, epsilon))
+
+    return Y, sample_names, atlas
+
+def deconvolve_uxm(methylomes, atlas, model, epsilon):
+    Y = []
+    sample_names = []
+    columns={'chromosome':'Chromosome',
+                            'start':'Start',
+                            'end':'End'}
+    df_atlas = pd.read_csv(atlas, sep='\t').rename(columns=columns)
+    df_atlas.drop_duplicates(inplace=True)
+    gr_atlas = pr.PyRanges(df_atlas).sort()
+    for methylome in methylomes:
+        # read methylomes data from mbtools
+        try:
+            df = pd.read_csv(methylome, sep='\t').rename(columns=columns)
+        except pd.errors.EmptyDataError:
+            continue
+        df.drop_duplicates(inplace=True)
+        df.dropna(inplace=True)
+        gr_sample = pr.PyRanges(df).sort()
+
+        # Init atlas and sample
+        gr = gr_atlas.join(gr_sample)
+        atlas = ReferenceAtlas(gr.df.loc[:, gr_atlas.columns])
+
+        # Combine U/M reads into methylome
+        u_reads = (np.array(gr.type) == 'U')*np.array(gr.u_reads)
+        m_reads = (np.array(gr.type) == 'M')*np.array(gr.m_reads)
+        um_reads = u_reads + m_reads
+        # sanity check
+        if any(um_reads > m_reads): Exception("Error in U/M read masking")
+
+        # Init sample
+        t = np.array(gr.num_called_reads)
+        name = get_sample_name(methylome)
+        sample_names.append(name)
+        s = Sample(name, um_reads, um_reads, t)
+
+        # Run
+        if model == 'nnls':
+            # Scale atlas by coverage in each position
+            atlas.A = np.dot(np.diag(t), atlas.A)
+            Y.append(fit_nnls(atlas, s))
+        else:
+            Y.append(fit_llse(atlas, s, epsilon))
+
+    return Y, sample_names, atlas
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--atlas', type=str,
+            default='/.mounts/labs/simpsonlab/users/jbroadbent/code/cfdna/nanopore_cfdna/atlases/meth_atlas.csv')
+    parser.add_argument('--name', type=str, default='sample1')
+    parser.add_argument('--model', default='llse', type=str, help='deconvolution model options: [nnml, llse]')
+    parser.add_argument('input', nargs='+',
+                        help='reference_modifications.tsv file')
+    parser.add_argument('--epsilon', default=0.05, type=float)
+    parser.add_argument('--uxm', action='store_true', help='Loyfer UXM deconvolution method')
+    args = parser.parse_args()
+
+    if args.uxm:
+        Y, sample_names, atlas = deconvolve_uxm(args.input, args.atlas, args.model, args.epsilon)
+    else:
+        Y, sample_names, atlas = deconvolve(args.input, args.atlas, args.model, args.epsilon)
+
+    print("\t".join(['ct'] + sample_names))
     for i, cell_type in enumerate(atlas.get_cell_types()):
         print("\t".join([cell_type] + [str(round(y[i],4)) for y in Y]))
 
