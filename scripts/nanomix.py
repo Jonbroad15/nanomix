@@ -7,7 +7,7 @@ import csv
 import os
 import pandas as pd
 
-from scipy.stats import binom
+from scipy.stats import binom, dirichlet
 from scipy.optimize import minimize, nnls, Bounds
 
 script_dir = os.path.dirname(__file__)
@@ -91,13 +91,28 @@ def eq_constraint(x):
 # Model wrappers
 #
 def fit_llse(atlas, sample, epsilon):
-    sigma_0 = np.array([ [ 1.0 / atlas.K ] * atlas.K ])
-    f = lambda x: -1 * log_likelihood_sequencing_with_errors(atlas, x, sample, epsilon)
+    n_trials = 10
 
+    f = lambda x: -1 * log_likelihood_sequencing_with_errors(atlas, x, sample, epsilon)
     bnds = [ (0.0, 1.0) ] * atlas.K
     cons = ({'type': 'eq', 'fun': eq_constraint})
-    res = minimize(f, sigma_0, method='SLSQP', options={'maxiter': 10, 'disp':False}, bounds=bnds, constraints=cons)
-    return res.x
+    
+    alpha = np.array([ 1.0 / atlas.K ] * atlas.K)
+    
+    best_ll = np.inf
+    best_sol = None
+
+    #initializations = dirichlet.rvs(alpha, size=n_trials).tolist()
+    initializations = [ alpha ] # uniform
+
+    for (i, init) in enumerate(initializations):
+        sigma_0 = dirichlet.rvs(alpha, size=1)
+        res = minimize(f, init, method='SLSQP', options={'maxiter': 10, 'disp':False}, bounds=bnds, constraints=cons)
+        ll = res.get("fun")
+        if ll < best_ll:
+            best_ll = ll
+            best_sol = res
+    return best_sol.x
 
 def fit_nnls(atlas, sample):
 
@@ -156,6 +171,9 @@ def main():
             df = pd.read_csv(input_file, sep='\t')
         except pd.errors.EmptyDataError:
             continue
+        # remove positions with zero depth
+        df = df[df.num_called_reads > 0]
+        
         sample_name.append(get_sample_name(input_file))
         atlas = ReferenceAtlas(args.atlas, get_covered_positions(df))
         t = np.array(df.num_called_reads)
