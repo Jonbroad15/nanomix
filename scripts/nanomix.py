@@ -104,11 +104,12 @@ def get_sample_name(s):
 def deconvolve(methylomes, atlas, model, epsilon):
     Y = []
     sample_names = []
-    columns={'chromosome':'Chromosome',
+    columns={'chromosome':'Chromosome', 'chr':'Chromosome',
                             'start':'Start',
                             'end':'End'}
     df_atlas = pd.read_csv(atlas, sep='\t').rename(columns=columns)
     df_atlas.drop_duplicates(inplace=True)
+    df_atlas.dropna(inplace=True)
     gr_atlas = pr.PyRanges(df_atlas).sort()
     for methylome in methylomes:
         # read methylomes data from mbtools
@@ -126,7 +127,8 @@ def deconvolve(methylomes, atlas, model, epsilon):
         xhat = np.array(gr.modification_frequency)
         t = np.array(gr.num_called_reads)
         m = np.rint((t * xhat))
-        sample_name.append(get_sample_name(methylome))
+        name = get_sample_name(methylome)
+        sample_names.append(name)
         s = Sample(name, xhat, m, t)
 
         # Run
@@ -161,6 +163,7 @@ def deconvolve_uxm(methylomes, atlas, model, epsilon):
         atlas = ReferenceAtlas(gr.df.loc[:, gr_atlas.columns])
 
         # Combine U/M reads into methylome
+        breakpoint()
         u_reads = (np.array(gr.type) == 'U')*np.array(gr.u_reads)
         m_reads = (np.array(gr.type) == 'M')*np.array(gr.m_reads)
         um_reads = u_reads + m_reads
