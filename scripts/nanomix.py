@@ -5,6 +5,7 @@ import numpy as np
 import sys
 import csv
 import os
+import re
 import pandas as pd
 import pyranges as pr
 
@@ -45,14 +46,17 @@ class Sample:
 
 # Binomial model with sequencing errors, when epsilon = 0
 # this is the same as the perfect data model
-def log_likelihood_sequencing_with_errors(atlas, sigma, sample, epsilon):
+def log_likelihood_sequencing_with_errors(atlas, sigma, sample, p01,p11=None):
     sigma_t = sigma.reshape( (atlas.K, 1) )
 
     # the solver we use can try values that are outside
     # the constraints we impose, we need to clip here to prevent
     # things from blowing up
     x = np.clip(np.ravel(atlas.get_x(sigma_t)), 0, 1.0)
-    p = x * (1 - epsilon) + (1 - x) * epsilon
+    if p11:
+        p = x * p11 + (1-x) * p01
+    else:
+        p = x * (1 - p01) + (1 - x) * p01
     b =  binom.logpmf(sample.m, sample.t, p)
 
     #print("SigmaT", sigma_t)
@@ -70,27 +74,27 @@ def eq_constraint(x):
 #
 # Model wrappers
 #
-def fit_llse(atlas, sample, epsilon):
-    n_trials = 10
-
-    f = lambda x: -1 * log_likelihood_sequencing_with_errors(atlas, x, sample, epsilon)
+def fit_llse(atlas, sample, p01, p11, random_inits):
+    f = lambda x: -1 * log_likelihood_sequencing_with_errors(atlas, x, sample, p01, p11)
     bnds = [ (0.0, 1.0) ] * atlas.K
     cons = ({'type': 'eq', 'fun': eq_constraint})
     alpha = np.array([ 1.0 / atlas.K ] * atlas.K)
-    best_ll = np.inf
-    best_sol = None
+    if random_inits:
+        n_trials = 20
+        best_ll = np.inf
+        best_sol = None
+        initializations = dirichlet.rvs(alpha, size=n_trials).tolist()
 
-    #initializations = dirichlet.rvs(alpha, size=n_trials).tolist()
-    initializations = [ alpha ] # uniform
-
-    for (i, init) in enumerate(initializations):
-        sigma_0 = dirichlet.rvs(alpha, size=1)
-        res = minimize(f, init, method='SLSQP', options={'maxiter': 10, 'disp':False}, bounds=bnds, constraints=cons)
-        ll = res.get("fun")
-        if ll < best_ll:
-            best_ll = ll
-            best_sol = res
-    return best_sol.x
+        for (i, init) in enumerate(initializations):
+            res = minimize(f, init, method='SLSQP', options={'maxiter': 10, 'disp':False}, bounds=bnds, constraints=cons)
+            ll = res.get("fun")
+            if ll < best_ll:
+                best_ll = ll
+                best_sol = res
+        return best_sol.x
+    else:
+        res = minimize(f, alpha, method='SLSQP', options={'maxiter': 10, 'disp':False}, bounds=bnds, constraints=cons)
+        return res.x
 
 def fit_nnls(atlas, sample):
 
@@ -111,8 +115,7 @@ def fit_nnls_constrained(atlas, sample):
 
 def get_sample_name(s):
     s = s.split('/')[-1]
-    s = s.split('.')[0]
-    return s
+    return re.search("\.\d+(\.\d+)*", s)[0][1:]
 
 def deconvolve(methylomes, atlas, model, epsilon):
     Y = []
@@ -145,10 +148,16 @@ def deconvolve(methylomes, atlas, model, epsilon):
         s = Sample(name, xhat, m, t)
 
         # Run
+        p01 = .0909
+        p11 = .949
         if model == 'nnls':
             Y.append(fit_nnls(atlas, s))
+        elif model == 'llse-asymmetric':
+            Y.append(fit_llse(atlas, s, p01,p11, True))
+        elif model == 'llse':
+            Y.append(fit_llse(atlas, s, p01,None, True))
         else:
-            Y.append(fit_llse(atlas, s, epsilon))
+            Exception(f"no such model {model}")
 
     return Y, sample_names, atlas
 
@@ -194,8 +203,12 @@ def deconvolve_uxm(methylomes, atlas, model, epsilon):
             # Scale atlas by coverage in each position
             atlas.A = np.dot(np.diag(t), atlas.A)
             Y.append(fit_nnls(atlas, s))
+        elif model == 'llse-asymmetric':
+            Y.append(fit_llse_asym(atlas, s, .949, epsilon, True))
+        elif model == 'llse':
+            Y.append(fit_llse(atlas, s, epsilon, True))
         else:
-            Y.append(fit_llse(atlas, s, epsilon))
+            Exception(f"no such model {model}")
 
     return Y, sample_names, atlas
 
