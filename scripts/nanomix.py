@@ -44,7 +44,7 @@ class Sample:
         self.m = m
         self.t = t
 
-# Binomial model with sequencing errors, when epsilon = 0
+# Binomial model with sequencing errors, when p01 = 0
 # this is the same as the perfect data model
 def log_likelihood_sequencing_with_errors(atlas, sigma, sample, p01,p11=None):
     sigma_t = sigma.reshape( (atlas.K, 1) )
@@ -59,13 +59,6 @@ def log_likelihood_sequencing_with_errors(atlas, sigma, sample, p01,p11=None):
         p = x * (1 - p01) + (1 - x) * p01
     b =  binom.logpmf(sample.m, sample.t, p)
 
-    #print("SigmaT", sigma_t)
-    #print("SigmaSum", np.sum(sigma_t))
-    #print("m", sample.m)
-    #print("t", sample.t)
-    #print("x", x)
-    #print("B", b)
-    #print("Sum", np.sum(b))
     return np.sum(b)
 
 def eq_constraint(x):
@@ -80,21 +73,21 @@ def fit_llse(atlas, sample, p01, p11, random_inits):
     cons = ({'type': 'eq', 'fun': eq_constraint})
     alpha = np.array([ 1.0 / atlas.K ] * atlas.K)
     if random_inits:
-        n_trials = 20
+        n_trials = 10
         best_ll = np.inf
         best_sol = None
         initializations = dirichlet.rvs(alpha, size=n_trials).tolist()
 
         for (i, init) in enumerate(initializations):
-            res = minimize(f, init, method='SLSQP', options={'maxiter': 10, 'disp':False}, bounds=bnds, constraints=cons)
+            res = minimize(f, init, method='SLSQP', options={'maxiter': 100, 'disp':False}, bounds=bnds, constraints=cons)
             ll = res.get("fun")
             if ll < best_ll:
                 best_ll = ll
                 best_sol = res
-        return best_sol.x
+        return best_sol.x/np.sum(best_sol.x)
     else:
-        res = minimize(f, alpha, method='SLSQP', options={'maxiter': 10, 'disp':False}, bounds=bnds, constraints=cons)
-        return res.x
+        res = minimize(f, alpha, method='SLSQP', options={'maxiter': 100, 'disp':False}, bounds=bnds, constraints=cons)
+        return res.x / np.sum(res.x)
 
 def fit_nnls(atlas, sample):
 
@@ -115,9 +108,11 @@ def fit_nnls_constrained(atlas, sample):
 
 def get_sample_name(s):
     s = s.split('/')[-1]
-    return re.search("\.\d+(\.\d+)*", s)[0][1:]
+    # label with coverage level
+    # return re.search("\.\d+(\.\d+)*", s)[0][1:]
+    return  s.split('.')[0]
 
-def deconvolve(methylomes, atlas, model, epsilon):
+def deconvolve(methylomes, atlas, model, p01, p11, random_inits):
     Y = []
     sample_names = []
     columns={'chromosome':'Chromosome', 'chr':'Chromosome',
@@ -148,20 +143,16 @@ def deconvolve(methylomes, atlas, model, epsilon):
         s = Sample(name, xhat, m, t)
 
         # Run
-        p01 = .0909
-        p11 = .949
         if model == 'nnls':
             Y.append(fit_nnls(atlas, s))
-        elif model == 'llse-asymmetric':
-            Y.append(fit_llse(atlas, s, p01,p11, True))
         elif model == 'llse':
-            Y.append(fit_llse(atlas, s, p01,None, True))
+            Y.append(fit_llse(atlas, s, p01, p11, random_inits))
         else:
             Exception(f"no such model {model}")
 
     return Y, sample_names, atlas
 
-def deconvolve_uxm(methylomes, atlas, model, epsilon):
+def deconvolve_uxm(methylomes, atlas, model, p01, p11, random_inits):
     Y = []
     sample_names = []
     columns={'chromosome':'Chromosome',
@@ -197,16 +188,14 @@ def deconvolve_uxm(methylomes, atlas, model, epsilon):
         name = get_sample_name(methylome)
         sample_names.append(name)
         s = Sample(name, um_reads, um_reads, t)
+        atlas.A = np.dot(np.diag(t), atlas.A)
 
         # Run
         if model == 'nnls':
             # Scale atlas by coverage in each position
-            atlas.A = np.dot(np.diag(t), atlas.A)
             Y.append(fit_nnls(atlas, s))
-        elif model == 'llse-asymmetric':
-            Y.append(fit_llse_asym(atlas, s, .949, epsilon, True))
         elif model == 'llse':
-            Y.append(fit_llse(atlas, s, epsilon, True))
+            Y.append(fit_llse(atlas, s, p01, p11, True))
         else:
             Exception(f"no such model {model}")
 
@@ -220,14 +209,16 @@ def main():
     parser.add_argument('--model', default='llse', type=str, help='deconvolution model options: [nnml, llse]')
     parser.add_argument('input', nargs='+',
                         help='reference_modifications.tsv file')
-    parser.add_argument('--epsilon', default=0.05, type=float)
+    parser.add_argument('--p01', default=0.0909, type=float)
+    parser.add_argument('--p11', default=None, type=float)
+    parser.add_argument('--random_inits', action='store_true')
     parser.add_argument('--uxm', action='store_true', help='Loyfer UXM deconvolution method')
     args = parser.parse_args()
 
     if args.uxm:
-        Y, sample_names, atlas = deconvolve_uxm(args.input, args.atlas, args.model, args.epsilon)
+        Y, sample_names, atlas = deconvolve_uxm(args.input, args.atlas, args.model, args.p01, args.p11, args.random_inits)
     else:
-        Y, sample_names, atlas = deconvolve(args.input, args.atlas, args.model, args.epsilon)
+        Y, sample_names, atlas = deconvolve(args.input, args.atlas, args.model, args.p01, args.p11, args.random_inits)
 
     print("\t".join(['ct'] + sample_names))
     for i, cell_type in enumerate(atlas.get_cell_types()):
