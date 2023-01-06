@@ -1,0 +1,21 @@
+[package]
+name = "nanomix"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "nanomix"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.17.3", features = ["extension-module"] }
+crossbeam-utils = "0.8"
+crossbeam-channel = "0.5"
+clap = "2.33.0"
+probability = "0.15.5"
+rand = "0.5.6"
+csv = "1.1.6"
+ndarray = "0.15.4"
+rulinalg = "0.4.2"
+intervaltree = "0.2.7"
