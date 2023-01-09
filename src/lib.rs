@@ -285,8 +285,7 @@ pub fn deconvolution_loss(sigma: &Vec<f64>, sigma_hat: &Vec<f64>) -> f64 {
     sigma.iter().zip(sigma_hat.iter()).map(|(y, yhat)| (y-yhat).powf(2.0)).sum::<f64>().powf(0.5)
 }
 #[pyfunction]
-pub fn generate_data(output: &str,  atlas: &str, p01: f64, 
-                     p11: f64, sigma: Vec<f64>, coverage: f64, region_size: u64) -> PyResult<()> {
+pub fn generate_methylome(methylome: &str,  atlas: &str, p01: f64, p11: f64, sigma: Vec<f64>, coverage: f64, region_size: u64) -> PyResult<()> {
     let atlas_file = File::open(atlas)?;
     let mut atlas_reader = BufReader::new(atlas_file);
     let mut header = String::new();
@@ -305,7 +304,7 @@ pub fn generate_data(output: &str,  atlas: &str, p01: f64,
         .collect();
     let wc = WeightedChoice::new(&mut choices);
 
-    let buffer = File::create(output).unwrap();
+    let buffer = File::create(methylome).unwrap();
     let mut writer = BufWriter::new(buffer);
     write!(writer, "chromosome\tstart\tend\ttotal_calls\tmodified_calls\tcell_type\tlabel\n")
         .unwrap();
@@ -345,7 +344,7 @@ pub fn generate_data(output: &str,  atlas: &str, p01: f64,
 #[pymodule]
 fn nanomix(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<MMSE>()?;
-    m.add_function(wrap_pyfunction!(generate_data, m)?)?;
+    m.add_function(wrap_pyfunction!(generate_methylome, m)?)?;
     Ok(())
 }
 
@@ -374,7 +373,7 @@ mod tests {
     }
     //#[test]
     fn init_bmm_with_generated_data() {
-        generate_data("adipocyte_simulated_methylome.tsv", "loyfer250Atlas.tsv", 0.05, 0.95, 0);
+        generate_methylome("adipocyte_simulated_methylome.tsv", "loyfer250Atlas.tsv", 0.05, 0.95, 0);
         let model = MMSE::new("adipocyte_simulated_methylome.tsv", "loyfer250Atlas.tsv", 0.05, 0.95).unwrap();
     }
     #[test]

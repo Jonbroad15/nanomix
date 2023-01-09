@@ -14,37 +14,6 @@ from nanomix import nanomix
 from scipy.stats import binom, dirichlet
 from scipy.optimize import minimize, nnls, Bounds
 
-script_dir = os.path.dirname(__file__)
-ATLAS = os.path.join(script_dir, '..', 'atlases', 'meth_atlas.csv')
-
-class ReferenceAtlas:
-    def __init__(self, gr):
-        self.cpg_ids = [(chrom, start, end) for chrom, start, end in\
-                        zip(gr.Chromosome, gr.Start, gr.End)]
-        cell_types = list(gr.columns[3:])
-        self.K = len(cell_types)
-        self.v = {k:list(gr[k]) for k in cell_types}
-        self.A = np.array(gr.loc[:, list(cell_types)])
-
-    def get_x(self, sigma):
-        x = np.matmul(self.A, sigma)
-        return x
-
-    def get_num_cpgs(self):
-        return len(self.cpg_ids)
-
-    def get_cell_types(self):
-        return list(self.v.keys())
-
-    def get_num_cell_types(self):
-        return len(self.v.keys())
-
-class Sample:
-    def __init__(self, name, x_hat, m, t):
-        self.name = name
-        self.x_hat = x_hat
-        self.m = m
-        self.t = t
 
 def eq_constraint(x):
     return 1 - np.sum(x)
@@ -102,27 +71,23 @@ def log_likelihood_sequencing_with_errors(atlas, sigma, sample, p01,p11):
 def fit_uniform(atlas, sample):
     return np.array([1.0 / atlas.K ] * atlas.K)
 
-def fit_llse(atlas, sample, p01, p11, random_inits):
+def fit_llse(atlas, sample, p01, p11):
     f = lambda x: -1 * log_likelihood_sequencing_with_errors(atlas, x, sample, p01, p11)
     bnds = [ (0.0, 1.0) ] * atlas.K
     cons = ({'type': 'eq', 'fun': eq_constraint})
     alpha = np.array([ 1.0 / atlas.K ] * atlas.K)
-    if random_inits:
-        n_trials = 10
-        best_ll = np.inf
-        best_sol = None
-        initializations = dirichlet.rvs(alpha, size=n_trials).tolist()
+    n_trials = 10
+    best_ll = np.inf
+    best_sol = None
+    initializations = dirichlet.rvs(alpha, size=n_trials).tolist()
 
-        for (i, init) in enumerate(initializations):
-            res = minimize(f, init, method='SLSQP', options={'maxiter': 100, 'disp':False}, bounds=bnds, constraints=cons)
-            ll = res.get("fun")
-            if ll < best_ll:
-                best_ll = ll
-                best_sol = res
-        return best_sol.x/np.sum(best_sol.x)
-    else:
-        res = minimize(f, alpha, method='SLSQP', options={'maxiter': 100, 'disp':False}, bounds=bnds, constraints=cons)
-        return res.x / np.sum(res.x)
+    for (i, init) in enumerate(initializations):
+        res = minimize(f, init, method='SLSQP', options={'maxiter': 100, 'disp':False}, bounds=bnds, constraints=cons)
+        ll = res.get("fun")
+        if ll < best_ll:
+            best_ll = ll
+            best_sol = res
+    return best_sol.x/np.sum(best_sol.x)
 
 def fit_nnls(atlas, sample):
 
