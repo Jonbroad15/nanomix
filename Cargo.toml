@@ -3,6 +3,9 @@ name = "nanomix"
 version = "0.1.0"
 edition = "2021"
 
+[package.metadata.maturin]
+name = "nanomix._nanomix"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 name = "nanomix"

@@ -1,13 +1,13 @@
-#! /usr/bin/env python
-
 import argparse
 import numpy as np
-import pandas as pd
-import pyranges as pr
+import csv
+from collections import Counter
 
-from nanomix import nanomix
-from models import fit_llse, fit_llsp, fit_nnls, fit_mmse, fit_uniform
+import _nanomix
+from models import fit_model, fit_mmse
 from atlas import ReferenceAtlas, Sample
+from tools import *
+
 
 def simulate(methylome, atlas, sigma, coverage, region_size, p01, p11):
     """
@@ -23,9 +23,15 @@ def simulate(methylome, atlas, sigma, coverage, region_size, p01, p11):
     :param p11: nanopore correct call rate
     :return: None
     """
-    nanomix.generate_methylome(methylome, atlas, sigma, coverage, region_size, p01, p11)
+    _nanomix.generate_methylome(methylome, atlas, sigma, coverage, region_size, p01, p11)
 
-def evaluate(methylome, atlas, model, p01, p11):
+def evaluate(methylome, atlas, model,
+                p01=0.,
+                p11=1.,
+                sigma_init='null',
+                max_iter=10,
+                min_proportion=0.01,
+                stop_thresh=1e-3):
     """
     Evaluate the performance of a model on a simulated methylome
     Wrapper function to call Rust code from Python
@@ -35,34 +41,64 @@ def evaluate(methylome, atlas, model, p01, p11):
     :param model: model to evaluate
     :param p01: nanopore miscall rate
     :param p11: nanopore correct call rate
+    :param sigma_init: model to initialize sigma (mmse only)
+    :param max_iter: maximum number of iterations (mmse only)
+    :param min_proportion: minimum proportion of a cell type (mmse only)
+    :param stop_thresh: stopping threshold (mmse only)
     :return: None
     """
-    #TODO: Add evaluation code
+    # Determine cell_type proportions from methylome
+    cell_types = get_cell_types(atlas)
+    cell_type_fragment_counts = Counter(cell_types)
+    true_assignments = []
 
-def fit_model(model, atlas, sample, p01, p11):
-    """
-    Wrapper function to select model for deconvolution
+    # Open methylome and count 
+    with open(methylome, 'r') as f:
+        reader = csv.reader(f, delimiter='\t')
+        header = next(reader)
+        cell_type_idx = header.index('cell_type')
+        for row in reader:
+            cell_type_fragment_counts[row[cell_type_idx]] += 1
+            true_assignments.append(row[cell_type_idx])
 
-    :param model: model to fit
-    :param atlas: reference atlas
-    :param sample: sample to deconvolute
-    :param p01: nanopore miscall rate
-    :param p11: nanopore correct call rate
-    :return: None
-    """
-    if model == 'nnls':
-        sigma = fit_nnls(atlas, s)
-    elif model == 'llse':
-        sigma = fit_llse(atlas, s, p01, p11)
-    elif model == 'llsp':
-        sigma = fit_llsp(atlas, s, p01, p11)
-    elif model == 'null':
-        sigma = fit_uniform(atlas, s)
+    # Enumerate true_assignments
+    enumerated_true_assignments = [cell_types.index(cell_type) for cell_type in true_assignments]
+
+    # Convert counts to proportions
+    total_fragments = sum(cell_type_fragment_counts.values())
+    true_cell_type_proportions = {cell_type : count / total_fragments for cell_type, count in cell_type_fragment_counts.items()}
+    true_sigma = np.array([true_cell_type_proportions[cell_type] for cell_type in cell_types])
+
+    # Run deconvolution
+    if model == 'mmse':
+        sigma = fit_model(methylome, atlas, sigma_init, p01, p11)
+        cell_type_proportions = fit_mmse(atlas, methylome, sigma, p01, p11, stop_thresh, max_iter, min_proportion,
+                                         true_sigma=true_sigma, true_assignments=enumerated_true_assignments)
     else:
-        raise ValueError(f"no such model: {model}. Choose from [nnls, llse, llsp, mmse]")
-    return sigma
+        cell_type_proportions = deconvolute(methylome, atlas, model, p01, p11, sigma_init, max_iter, min_proportion, stop_thresh, print_output=False)
 
-def deconvolute(methylomes, atlas, model, p01, p11, sigma_init, max_iter, min_proportion, stop_thresh):
+    # Compute deconvolution loss
+    sigma = np.array([cell_type_proportions[cell_type] for cell_type in cell_types])
+    deconvolution_loss = np.linalg.norm(true_sigma - sigma)
+    print(f"Deconvolution loss: {deconvolution_loss}")
+
+    # Assign cell types
+    cell_types += ['unassigned']
+    model = _nanomix.MMSE(methylome, atlas, sigma, p01=0., p11=1.)
+    for threshold in [.5, .6, .7, .8, .9]:
+        enumerated_assignments = model.assign_fragments_t(threshold)
+        assignments = [cell_types[assignment] for assignment in enumerated_assignments]
+        accuracy = sum([1 if true_assignment == assignment else 0 for true_assignment, assignment in zip(true_assignments, assignments)]) / len(assignments)
+        print(f"Accuracy at confidence {threshold}: {accuracy}")
+
+def deconvolute(methylome, atlas_path, model,
+                p01=0.,
+                p11=1.,
+                sigma_init='null',
+                max_iter=10,
+                min_proportion=0.01,
+                stop_thresh=1e-3,
+                print_output=True):
     """
     Deconvolute a methylome using a given model to get the proportion of each cell type present
 
@@ -78,56 +114,71 @@ def deconvolute(methylomes, atlas, model, p01, p11, sigma_init, max_iter, min_pr
     :return: none
     """
 
-    # load atlas
-    columns={'chromosome':'Chromosome', 'chr':'Chromosome',
-                            'start':'Start',
-                            'end':'End'}
-    df_atlas = pd.read_csv(atlas, sep='\t').rename(columns=columns)
-    df_atlas.drop_duplicates(inplace=True)
-    if 'label' in df_atlas.columns: df_atlas.drop('label', axis=1, inplace=True)
-    df_atlas.dropna(inplace=True)
-    gr_atlas = pr.PyRanges(df_atlas).sort()
-
-    # Read methylomes data from mbtools
-    try:
-        df = pd.read_csv(methylome, sep='\t').rename(columns=columns)
-    except pd.errors.EmptyDataError:
-        Exception("Empty methylome file")
-    df.dropna(inplace=True)
-    gr_sample = pr.PyRanges(df).sort()
-
-    # Join atlas and sample
-    gr = gr_atlas.join(gr_sample)
-    atlas = ReferenceAtlas(gr.df.loc[:, gr_atlas.columns])
-    t = np.array(gr.total_calls, dtype=np.float32)
-    m = np.array(gr.modified_calls, dtype=np.float32)
-
-    xhat = m/t
-    name = get_sample_name(methylome)
-    sample_names.append(name)
-    s = Sample(name, xhat, m, t)
 
     # Run
     if model == 'mmse':
-        #TODO: change output of fit_mmse to be consistent with other models (dictionary)
-        sigma = fit_model(init, atlas, s, p01, p11)
-        cell_type_proportions = fit_mmse(atlas, methylome, sigma, p01, p11, stop_thresh=1e-3, max_iter=100, min_proportion=0.01)
+        sigma = fit_model(methylome, atlas_path, sigma_init, p01, p11)
+        cell_type_proportions = fit_mmse(atlas_path, methylome, sigma, p01, p11, stop_thresh, max_iter, min_proportion)
     else:
-        sigma = fit_model(model, atlas, s, p01, p11)
+        sigma = fit_model(methylome, atlas_path, model, p01, p11)
         cell_type_proportions = {cell_type: proportion for cell_type, proportion in zip(atlas.get_cell_types(), sigma)}
 
     # return deconvolution results
-    print("cell_type\tproportion")
-    for cell_type, proportion in cell_type_proportions.items():
-        print(f"{cell_type}\t{proportion}")
+    if print_output:
+        print("cell_type\tproportion")
+        for cell_type, proportion in cell_type_proportions.items():
+            print(f"{cell_type}\t{proportion}")
 
-    # TODO: return cell type assignments
+    return cell_type_proportions
 
+def assign_fragments(methylome, atlas, sigma,
+                     threshold=0.5,
+                     print_output=True):
+    """
+    Assign fragments in the methylome to cell types
+    Initialize MMSE model to use maximum responsibility (gamma) assignments
+
+    :param atlas: path to reference atlas
+    :param methylome: path to methylome
+    :param sigma: path to tsv file containing cell type proportions
+    :param threshold: confidence threshold for assigning fragments to cell types
+    :param print_output: print output to stdout
+    :return: assignments vector in order of fragments in the methylome
+    """
+    # Need to ensure that the cell types are in the same order as the atlas
+    cell_types = get_cell_types(atlas)
+
+    # get sigma vector
+    with open(sigma, 'r') as f:
+        reader = csv.reader(f, delimiter='\t')
+        header = next(reader)
+        cell_type_proportions = {row[0] : float(row[1]) for row in reader}
+
+    # get sigma vector in the same order as the atlas
+    sigma = np.array([cell_type_proportions[cell_type] for cell_type in cell_types])
+
+    model = _nanomix.MMSE(methylome, atlas, sigma, p01=0., p11=1.)
+    enumerated_assignments = model.assign_fragments_t(threshold)
+
+    # map enumerated assignments to a vector of (string) cell type assignments
+    cell_types += ['unassigned']
+    cell_type_assignments = [cell_types[i] for i in enumerated_assignments]
+
+    # return cell type assignments to standard output
+    if print_output:
+        with open(methylome, 'r') as f:
+            reader = csv.reader(f, delimiter='\t')
+            header = next(reader)
+            print('\t'.join(header + ['cell_type']))
+            for row, cell_type in zip(reader, cell_type_assignments):
+                print('\t'.join(row + [cell_type]))
+
+    return cell_type_assignments
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-a', '--atlas', type=str, default='atlases/39Bisulfite.csv')
+    parser.add_argument('-a', '--atlas', type=str, default='atlases/39Bisulfite.csv', help='Path to reference atlas')
     parser.add_argument('-p01', default=0.05, type=float, help='Sequencing miscall rate')
     parser.add_argument('-p11', default=0.95, type=float, help='Sequencing correct call rate')
     parser.add_argument('methylome', help='Path to methylome tsv file')
@@ -148,8 +199,12 @@ def main():
     parser_simulate = subparsers.add_parser('simulate')
     parser_simulate.add_argument('-c' '--coverage', default=1, type=float, help='Sequencing coverage')
     parser_simulate.add_argument('-r', '--region_size', default=5, help='Number of CpGs in each region')
-    parser.add_argument('-s', '--sigma', required=True, type=str, help='Path to sigma tsv file')
+    parser.add_argument('-s', '--sigma', default='sigma.tsv', type=str, help='Path to sigma tsv file')
     parser_simulate.set_defaults(func=simulate)
+
+    parser_assign = subparsers.add_parser('assign')
+    parser_assign.add_argument('-s', '--sigma', required=True, type=str, help='Path to sigma tsv file')
+    parser_assign.set_defaults(func=assign_fragments)
 
     args = parser.parse_args()
     args.func(args)

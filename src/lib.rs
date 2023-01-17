@@ -1,17 +1,14 @@
 use pyo3::prelude::*;
-use probability::distribution::{Sample, Discrete, Binomial};
+use probability::distribution::{Discrete, Binomial};
 use rand::distributions::{Weighted, WeightedChoice, Distribution, Poisson};
-use probability::source::default;
 use rand::prelude::*;
 use csv;
-use std::error::Error;
 use std::io::{BufReader, BufRead, BufWriter, Write};
-use std::fs::File;
+use std::fs;
 use intervaltree::*;
 use std::collections::HashMap;
 use core::ops::Range;
 use rulinalg::vector::Vector;
-use std::cmp;
 
 pub struct Read {
     chr: String,
@@ -138,7 +135,7 @@ impl MMSE {
 #[pymethods]
 impl MMSE {
     #[new]
-    pub fn new(methylome: &str, atlas: &str, p01: f64, p11: f64, sigma: &str) -> PyResult<Self> {
+    pub fn new(methylome: &str, atlas: &str, init_sigma: Vec<f64>, p01: f64, p11: f64) -> PyResult<Self> {
         let atlas = Atlas::new(atlas);
         // Read methylome into memory
         // Store the list of intervals for the methylome instead of interval tree
@@ -161,19 +158,6 @@ impl MMSE {
         let K = atlas.values[0].len();
         let N = methylome_data.len();
 
-        // read init sigma
-        let init_sigma: Vec<f64>;
-        if sigma == "null" {
-            init_sigma = (0..K).map(|_k| 1.0/K as f64).collect();
-        } else {
-            let f = File::open(sigma).unwrap();
-            let reader = BufReader::new(f);
-            init_sigma = reader.lines().skip(1)
-                .filter_map(|line| line.ok())
-                .map(|line| line.split("\t").last().unwrap().parse::<f64>().unwrap())
-                .collect();
-        }
-        eprintln!("sigma init: {:?}\tlen sigma_init: {}", &init_sigma, init_sigma.len());
         Ok(MMSE{
             sigma: init_sigma,
             N: N,
@@ -184,7 +168,7 @@ impl MMSE {
             p11: p11,
             assignments: vec![0 as usize; N]})
     }
-    pub fn optimize(&mut self, stop_thresh: f64, max_iter: u32, min_proportion: f64, true_sigma: Vec<f64>) -> PyResult<()>{
+    pub fn optimize(&mut self, stop_thresh: f64, max_iter: u32, min_proportion: f64)-> PyResult<()>{
         let mut i = 0;
         let mut ll_prev = self.e_step(&self.sigma);
         let mut ll = self.e_step(&self.sigma);
@@ -194,8 +178,8 @@ impl MMSE {
             self.m_step();
             ll = self.e_step(&self.sigma);
             let condition = 100.0*((ll - ll_prev)/ll_prev).abs();
-            eprintln!("Iteration: {}\tll: {:.5}\tpercent_change: {:.8}\tTrue Sigma ll: {:.5}\tlung_prop: {:.5}",
-                      i, ll, condition, self.e_step(&true_sigma), self.sigma[29]);
+            eprintln!("Iteration: {}\tLog-likelihood: {:.5}\tPercent_change: {:.8}",
+                      i, ll, condition);
             if ( condition < stop_thresh && i > 10 ) 
                 || i == max_iter-1 {
                 break;
@@ -208,28 +192,22 @@ impl MMSE {
         ll = self.e_step(&self.sigma);
         i += 1;
         eprintln!("Model optimized in {} steps. Log-likelihood = {}", i, ll);
-        println!("log-likelihood:\t{:.2}", ll);
+        eprintln!("log-likelihood:\t{:.2}", ll);
         Ok(())
     }
     pub fn evaluate(&mut self, stop_thresh: f64, max_iter: u32, min_proportion: f64,
-                    sigma: Vec<f64>, target_assignments: Vec<usize>)
-        -> (Vec<f64>, Vec<f64>){
+                    sigma: Vec<f64>, target_assignments: Vec<usize>) -> PyResult<()>{
         let mut i = 0;
         let mut ll_prev = self.e_step(&self.sigma);
         let mut ll = self.e_step(&self.sigma);
-        let mut deconv_loss = vec![];
-        let mut accuracy = vec![];
         loop {
             let loss = deconvolution_loss(&sigma, &self.sigma);
-            let acc = self.accuracy(target_assignments.clone());
-            eprintln!("Iter: {}\tLoss: {:.3}\tAccuracy: {:.3}\tLog-Likelihood: {:.3}\tLung: {:.3}",
-                   i, loss, acc, ll, self.sigma[29]);
+            let acc = self.accuracy(target_assignments.clone(), 0.5);
+            eprintln!("Iter: {}\tLoss: {:.3}\tAccuracy: {:.3}\tLog-Likelihood: {:.3}\t True Log-likelihood: {:.3}",
+                      i, loss, acc, ll, self.e_step(&sigma));
             i += 1;
             self.m_step();
             ll = self.e_step(&self.sigma);
-            deconv_loss.push(loss.clone());
-            accuracy.push(acc.clone());
-            //self.print_gamma(0);
             if (ll_prev - ll).abs()/ll < stop_thresh || i == max_iter {
                 break;
             } else {
@@ -240,17 +218,14 @@ impl MMSE {
         self.m_step();
         ll = self.e_step(&self.sigma);
         let loss = deconvolution_loss(&sigma, &self.sigma);
-        let acc = self.accuracy(target_assignments.clone());
-        deconv_loss.push(loss.clone());
-        accuracy.push(acc.clone());
-        //println!("assignments: {:?}\ntargets: {:?}", self.assignments, target_assignments);
-        eprintln!("Loss: {:.3}\t Accuracy: {:.3}\tLog-Likelihood: {:.3}", loss, acc, ll);
-        (deconv_loss, accuracy)
+        let acc = self.accuracy(target_assignments.clone(), 0.5);
+        eprintln!("Loss: {:.3}\t Accuracy: {:.3}\tLog-Likelihood: {:.3}\t True Log-likelihood: {:.3}", loss, acc, ll, self.e_step(&sigma));
+        Ok(())
     }
     pub fn reset(&mut self){
         self.sigma = (0..self.K).map(|_k| 1.0/self.K as f64).collect()
     }
-    fn assign_reads(&mut self) -> () {
+    fn assign_fragments(&mut self) -> () {
         for i in 0..self.N{ 
             let read = &self.methylome[i];
             let atlas_row = self.atlas.query(read);
@@ -259,14 +234,39 @@ impl MMSE {
         }
         ()
     }
-    pub fn accuracy(&mut self, target_assignments: Vec<usize>) -> f64 {
-        self.assign_reads();
+    pub fn assign_fragments_t(&mut self, threshold: f64) -> Vec<usize> {
+        // assign reads to the most likely cell type with confidence above threshold
+        // If the read is unnassigned it gets value K
+        let mut assignments = vec![0 as usize; self.N];
+        for i in 0..self.N{ 
+            let read = &self.methylome[i];
+            let atlas_row = self.atlas.query(read);
+            let gamma_vec: Vec<f64> = (0..self.K).map(|k| self.gamma(k, atlas_row, read)).collect();
+            if gamma_vec.iter().cloned().fold(0./0., f64::max) > threshold {
+                assignments[i] = Vector::new(gamma_vec).argmax().0;
+            } else {
+                // give the assignment a NaN value
+                assignments[i] = self.K;
+            }
+        }
+        assignments
+    }
+    pub fn accuracy(&mut self, target_assignments: Vec<usize>, threshold: f64) -> f64 {
+        self.assign_fragments();
         self.assignments.iter().zip(target_assignments.iter())
             .map(|(value, target)| (*value == *target) as u32 as f64)
             .sum::<f64>() / self.assignments.len() as f64
     }
+    pub fn cell_type_proportions(&mut self) -> HashMap<String, f64> {
+        // Return a hashmap of keys = cell type names and values = respective sigma proportions
+        let mut cell_type_proportions : HashMap<String, f64> = HashMap::new();
+        for (k, cell_type) in self.atlas.cell_types.iter().enumerate() {
+            cell_type_proportions.insert(cell_type.clone(), self.sigma[k]);
+        }
+        cell_type_proportions
+    }
     pub fn class_probabilities(&mut self, target_assignments: Vec<usize>) -> Vec<Vec<f64>> {
-        self.assign_reads();
+        self.assign_fragments();
         let mut probs: Vec<Vec<f64>> = self.assignments.iter().zip(target_assignments.iter())
             .map(|(value, target)| (*value == *target) as u32 as f64 )
             .map(|correct| vec![correct] )
@@ -285,8 +285,8 @@ pub fn deconvolution_loss(sigma: &Vec<f64>, sigma_hat: &Vec<f64>) -> f64 {
     sigma.iter().zip(sigma_hat.iter()).map(|(y, yhat)| (y-yhat).powf(2.0)).sum::<f64>().powf(0.5)
 }
 #[pyfunction]
-pub fn generate_methylome(methylome: &str,  atlas: &str, p01: f64, p11: f64, sigma: Vec<f64>, coverage: f64, region_size: u64) -> PyResult<()> {
-    let atlas_file = File::open(atlas)?;
+pub fn generate_methylome(methylome: &str,  atlas: &str, sigma_path: &str, coverage: f64, region_size: u64, p01: f64, p11: f64) -> PyResult<()> {
+    let atlas_file = fs::File::open(atlas)?;
     let mut atlas_reader = BufReader::new(atlas_file);
     let mut header = String::new();
     let _res = atlas_reader.read_line(&mut header);
@@ -295,6 +295,16 @@ pub fn generate_methylome(methylome: &str,  atlas: &str, p01: f64, p11: f64, sig
         .map(|x| x.trim())
         .map(|x| String::from(x))
         .collect();
+
+    // open sigma tsv file and read it into a vector
+    // warning: assumes that sigma.tsv lists the cell types in the same order as the atlas
+    let contents = fs::read_to_string(sigma_path)?;
+    let lines = contents.lines();
+    let mut sigma: Vec<f64> = Vec::new();
+    lines.skip(1).for_each(|line| {
+        let fields: Vec<&str> = line.split('\t').collect();
+        sigma.push(fields[1].parse::<f64>().unwrap());
+    });
     if cell_types.len() != sigma.len() { panic!("Length of Sigma ({}) != number of cell types ({})", sigma.len(), cell_types.len()) }
 
     let poi = Poisson::new(coverage);
@@ -304,9 +314,9 @@ pub fn generate_methylome(methylome: &str,  atlas: &str, p01: f64, p11: f64, sig
         .collect();
     let wc = WeightedChoice::new(&mut choices);
 
-    let buffer = File::create(methylome).unwrap();
+    let buffer = fs::File::create(methylome).unwrap();
     let mut writer = BufWriter::new(buffer);
-    write!(writer, "chromosome\tstart\tend\ttotal_calls\tmodified_calls\tcell_type\tlabel\n")
+    write!(writer, "chromosome\tstart\tend\ttotal_calls\tmodified_calls\tcell_type\n")
         .unwrap();
 
     let lines: Vec<Vec<String>> = atlas_reader.lines()
@@ -317,7 +327,6 @@ pub fn generate_methylome(methylome: &str,  atlas: &str, p01: f64, p11: f64, sig
         // Generate coverage from a poisson distribution
         let t = region_size; // rng.gen_range(5, 7);
         let c = poi.sample(&mut rng);
-        let region = &line[cell_types.len() + 2];
         for coverage in 0..c as usize {
             // Generate a random number of total calls and modified calls
             let cell_type = wc.sample(&mut rng);
@@ -332,17 +341,16 @@ pub fn generate_methylome(methylome: &str,  atlas: &str, p01: f64, p11: f64, sig
             let errors_10 = rand::distributions::Binomial::new(m, 1f64-p11).sample(&mut rng);
             m = m + errors_01 - errors_10;
 
-            let label = format!("{}:{}",&line[cell_types.len() + 2], coverage);
             let chr = &line[0];
             let start = &line[1].parse::<i32>().unwrap();
             let end = &line[2].parse::<i32>().unwrap();
-            write!(writer, "{}\t{}\t{}\t{}\t{}\t{}\t{}\n", chr, start, end, t, m, cell_type, label).unwrap();
+            write!(writer, "{}\t{}\t{}\t{}\t{}\t{}\n", chr, start, end, t, m, cell_type).unwrap();
         }
     }
     Ok(())
 }
 #[pymodule]
-fn nanomix(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn _nanomix(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<MMSE>()?;
     m.add_function(wrap_pyfunction!(generate_methylome, m)?)?;
     Ok(())
