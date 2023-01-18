@@ -1,2 +1,3 @@
 cell_type	proportion
-tissue1	0.3tissue2	0.7
+cell0	0.3
+cell1	0.7

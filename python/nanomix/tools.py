@@ -1,8 +1,5 @@
 import csv
-import pandas as pd
-import pyranges as pr
 import numpy as np
-from atlas import ReferenceAtlas, Sample
 
 def eq_constraint(x):
     return 1 - np.sum(x)
