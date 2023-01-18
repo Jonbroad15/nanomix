@@ -12,12 +12,11 @@ from models import fit_model, fit_mmse
 from atlas import ReferenceAtlas, Sample
 from tools import *
 
-def simulate(methylome, atlas, sigma, coverage, region_size, p01, p11):
+def simulate(atlas, sigma, coverage, region_size, p01, p11):
     """
     Simulate a methylome from a reference atlas at the given cell type proportion
     Wrapper function to call Rust code from Python
 
-    :param methylome: path to save simulated methylome
     :param atlas: path to reference atlas
     :param sigma: path to tsv file containing cell type proportions
     :param coverage: coverage of simulated reads
@@ -26,7 +25,7 @@ def simulate(methylome, atlas, sigma, coverage, region_size, p01, p11):
     :param p11: nanopore correct call rate
     :return: None
     """
-    generate_methylome(methylome, atlas, sigma, coverage, region_size, p01, p11)
+    generate_methylome(atlas, sigma, coverage, region_size, p01, p11)
 
 def evaluate(methylome, atlas, model,
                 p01=0.,
