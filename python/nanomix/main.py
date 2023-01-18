@@ -105,8 +105,8 @@ Sigma: A tsv file containing the cell-type mixture proportions. The file must co
     parser_simulate.add_argument('-a', '--atlas', type=str, default=BISULFITE_ATLAS, help='Path to reference atlas')
     parser_simulate.add_argument('-p01', default=0.05, type=float, help='Sequencing miscall rate')
     parser_simulate.add_argument('-p11', default=0.95, type=float, help='Sequencing correct call rate')
-    parser_simulate.add_argument('-c' '--coverage', default=1, type=float, help='Sequencing coverage')
-    parser_simulate.add_argument('-r', '--region_size', default=5, help='Number of CpGs in each region')
+    parser_simulate.add_argument('-c', '--coverage', default=1, type=float, help='Sequencing coverage')
+    parser_simulate.add_argument('-r', '--region_size', default=5, type=int, help='Number of CpGs in each region')
     parser_simulate.set_defaults(func=simulate)
 
     parser_assign = subparsers.add_parser('assign', formatter_class=argparse.RawDescriptionHelpFormatter, description="""
@@ -130,7 +130,8 @@ The simulate function can be used to create this file.
     parser_assign.set_defaults(func=assign_fragments)
 
     args = parser.parse_args()
-    args.func(args)
+    arg_dict = {k : v for k, v in vars(args).items() if k not in ['func','command']}
+    args.func(**arg_dict)
 
 if __name__ == "__main__":
     main()
