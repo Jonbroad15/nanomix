@@ -285,7 +285,7 @@ pub fn deconvolution_loss(sigma: &Vec<f64>, sigma_hat: &Vec<f64>) -> f64 {
     sigma.iter().zip(sigma_hat.iter()).map(|(y, yhat)| (y-yhat).powf(2.0)).sum::<f64>().powf(0.5)
 }
 #[pyfunction]
-pub fn generate_methylome(methylome: &str,  atlas: &str, sigma_path: &str, coverage: f64, region_size: u64, p01: f64, p11: f64) -> PyResult<()> {
+pub fn generate_methylome(atlas: &str, sigma_path: &str, coverage: f64, region_size: u64, p01: f64, p11: f64) -> PyResult<()> {
     let atlas_file = fs::File::open(atlas)?;
     let mut atlas_reader = BufReader::new(atlas_file);
     let mut header = String::new();
@@ -314,10 +314,7 @@ pub fn generate_methylome(methylome: &str,  atlas: &str, sigma_path: &str, cover
         .collect();
     let wc = WeightedChoice::new(&mut choices);
 
-    let buffer = fs::File::create(methylome).unwrap();
-    let mut writer = BufWriter::new(buffer);
-    write!(writer, "chromosome\tstart\tend\ttotal_calls\tmodified_calls\tcell_type\n")
-        .unwrap();
+    println!("chromosome\tstart\tend\ttotal_calls\tmodified_calls\tcell_type\n");
 
     let lines: Vec<Vec<String>> = atlas_reader.lines()
             .filter_map(|line| line.ok())
@@ -344,7 +341,7 @@ pub fn generate_methylome(methylome: &str,  atlas: &str, sigma_path: &str, cover
             let chr = &line[0];
             let start = &line[1].parse::<i32>().unwrap();
             let end = &line[2].parse::<i32>().unwrap();
-            write!(writer, "{}\t{}\t{}\t{}\t{}\t{}\n", chr, start, end, t, m, cell_type).unwrap();
+            println!("{}\t{}\t{}\t{}\t{}\t{}\n", chr, start, end, t, m, cell_type);
         }
     }
     Ok(())
