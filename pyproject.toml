@@ -4,6 +4,14 @@ build-backend = "maturin"
 
 [project]
 name = "nanomix"
+version = "0.1.0"
+description = "Methods for cell type deconvolution from Oxford Nanopore methylation calling"
+readme = "README.md"
+keywords = ["nanopore", "methylation", "deconvolution"]
+authors = [ { name = "Jonathan Broadbent", email = "jonbroad15@gmail.com" },
+            { name = "Jared Simpson", email = "jsimpson@oicr.on.ca" } ]
+maintainers = [ { name = "Jonathan Broadbent", email = "jonbroad15@gmail.com" } ]
+dependencies = ["pandas~=1.5.2", "pyranges==0.0.120", "numpy~=1.24.1", "scipy~=1.10.0"]
 requires-python = ">=3.7"
 classifiers = [
     "Programming Language :: Rust",
@@ -11,6 +19,11 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 
+[projects.urls]
+repository = "https://github.com/simpsonlab/nanomix"
+
+[project.scripts]
+nanomix = "nanomix:main"
 
 [tool.maturin]
 python-source = "python"
