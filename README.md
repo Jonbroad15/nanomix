@@ -28,16 +28,16 @@ nanomix deconvolute <METHYLOME> -a <ATLAS>
 ### Model
 We provide four deconvolution models
 
-- llse (default):   log-likelihood with sequencing errors. Maximize the likelihood of the methylome, atlas and sigma
+- **llse (default):**   log-likelihood with sequencing errors. Maximize the likelihood of the methylome, atlas and sigma
                     by assuming modification calls follow a binomial distribution. Good for sequencing data with high error
                     rate and non-uniform coverage distribution. (Oxford Nanopore)
-- nnls:             non-negative least squares. Minimize the squared error between the methylome and what we expect for
+- **nnls:**             non-negative least squares. Minimize the squared error between the methylome and what we expect for
                     the methylome (given sigma and the atlas). Recommended for fast deconvolution of methylomes with high
                     coverage. (Methylation Arrays)
-- mmse:             mixture model with sequencing errors. Also follows a binomial distribution, but softly assigns fragments
+- **mmse:**             mixture model with sequencing errors. Also follows a binomial distribution, but softly assigns fragments
                     to cell-types. Optimization uses expectation maximization (slower than above). Recommended for high resolution
                     deconvolution (many cell types) and an atlas with large regions of grouped CpGs.
-- llsp:             log-likelihood with sequencing perfect. Same as llse, without error modelling. Useful for differentiating the
+- **llsp:**             log-likelihood with sequencing perfect. Same as llse, without error modelling. Useful for differentiating the
                     effect of sequencing errors on deconvolution loss and accuracy.
 Select a model by:
 ```
