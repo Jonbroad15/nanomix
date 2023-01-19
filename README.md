@@ -2,6 +2,7 @@
 Methylation deconvolution is the process of determining the proportion of distinct cell types in a complex (hetergeneic) mixture of cell or cell free DNA.
 This tool provides suitable models for performing deconvolution on Nanopore sequencing data. In particular our new models account for the non-uniform coverage distribution and high error rate in modified base calling. We also include more typical deconvolution models for deconvolution of bisulfite sequencing data or bead chip arrays.
 
+
 ## Installation
 This package is available on PyPI
 ```
@@ -10,6 +11,13 @@ pip install nanomix
 or alternatively on Conda:
 ```
 conda install nanomix
+```
+Installing from source requires [maturin](https://github.com/PyO3/maturin)
+```
+conda install maturin
+git clone https://github.com/Jonbroad15/nanomix.git
+cd nanomix
+maturin develop
 ```
 
 ## Usage
