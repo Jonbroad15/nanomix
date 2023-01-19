@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "nanomix"
-version = "0.1.0"
+version = "0.1.1"
 description = "Methods for cell type deconvolution from Oxford Nanopore methylation calling"
 readme = "README.md"
 keywords = ["nanopore", "methylation", "deconvolution"]
@@ -26,4 +26,5 @@ repository = "https://github.com/simpsonlab/nanomix"
 nanomix = "nanomix:main"
 
 [tool.maturin]
+include = ["README.md", "LICENSE", "atlases/*"]
 python-source = "python"

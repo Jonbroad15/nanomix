@@ -13,6 +13,7 @@ script_dir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(script_dir)
 
 from _nanomix import *
+from atlas import ReferenceAtlas, Sample
 from tools import *
 
 
@@ -63,7 +64,7 @@ def fit_model(methylome, atlas_path, model, p01, p11):
     elif model == 'llse':
         sigma = fit_llse(atlas, s, p01, p11)
     elif model == 'llsp':
-        sigma = fit_llsp(atlas, s, p01, p11)
+        sigma = fit_llsp(atlas, s)
     elif model == 'null':
         sigma = fit_uniform(atlas, s)
     else:
@@ -96,7 +97,7 @@ def fit_llsp(atlas, sample,
     :return: cell-type proportions
     :rtype: np.array
     """
-    f = lambda x: -1 * log_likelihood_sequencing_perfect(atlas, x, sample, p01, p11)
+    f = lambda x: -1 * log_likelihood_sequencing_perfect(atlas, x, sample)
     bnds = [ (0.0, 1.0) ] * atlas.K
     cons = ({'type': 'eq', 'fun': eq_constraint})
     alpha = np.array([ 1.0 / atlas.K ] * atlas.K)

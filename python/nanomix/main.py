@@ -14,8 +14,7 @@ def main():
 Nanomix: a tool for cell-type deconvolution of mixed methylation calls from Oxford Nanopore sequencing data.
 ------------------------------------------------------------------------------------------------------------
 Version:   v0.1.0
-About:     developed in the simpsonlab.github.io by Jonathan Broadbent.
-Docs:      http://nanomix.readthedocs.io/
+About:     Developed in the simpsonlab.github.io by Jonathan Broadbent.
 Code:      https://github.com/simpsonlab/nanomix
 
 This package incorperates 4 different deconvolution models (nnls, llse, llsp, mmse).
@@ -65,9 +64,9 @@ Deconvolution Models:
     parser_deconvolute.add_argument('-p11', default=0.95, type=float, help='Sequencing correct call rate')
     parser_deconvolute.add_argument('-m', '--model', default='llse', type=str, help='Deconvolution model options: [nnls, llse, llsp, mmse]')
     parser_deconvolute.add_argument('-i', '--sigma_init', default='null', type=str, help='Initalize sigma with one of the other models (mmse only)')
-    parser_deconvolute.add_argument('-n', '--max_iter', default=100, type=int, help='Maximum number of iterations for the model (mmse only)')
+    parser_deconvolute.add_argument('-n', '--max_iter', default=100, type=int, help='Maximum number of iterations for the EM optimization (mmse only)')
     parser_deconvolute.add_argument('-p', '--min_proportion', default=0.01, type=float, help='Minimum proportion of a cell type to be considered (mmse only)')
-    parser_deconvolute.add_argument('-t', '--stop_thresh', default=1e-3, type=float, help='Stop EM iterations when change in log-likelihood falls below this value (mmse only)')
+    parser_deconvolute.add_argument('-t', '--stop_thresh', default=1e-3, type=float, help='Stop EM iterations when percent change in log-likelihood falls below this value (mmse only)')
     parser_deconvolute.set_defaults(func=deconvolute)
 
     parser_evaluate = subparsers.add_parser('evaluate', formatter_class=argparse.RawDescriptionHelpFormatter, description="""

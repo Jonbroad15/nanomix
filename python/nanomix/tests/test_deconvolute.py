@@ -50,32 +50,24 @@ class TestMain(unittest.TestCase):
 
     def test_llse(self):
         # Test deconvolute function
-        methylome = os.path.join(script_dir, 'test_data', 'test_methylome.tsv')
-        atlas = os.path.join(script_dir, 'test_data', 'test_atlas.tsv')
         cell_type_proportions = deconvolute(methylome, atlas, 'llse')
 
         # check that the cell_type proportion values are close
         self.assertAlmostEqual(cell_type_proportions['cell1'], 0.7, places=1)
 
     def test_nnls(self):
-        methylome = os.path.join(script_dir, 'test_data', 'test_methylome.tsv')
-        atlas = os.path.join(script_dir, 'test_data', 'test_atlas.tsv')
         cell_type_proportions = deconvolute(methylome, atlas, 'nnls')
 
         # check that the cell_type proportion values are close
         self.assertAlmostEqual(cell_type_proportions['cell1'], 0.7, places=1)
 
     def test_llsp(self):
-        methylome = os.path.join(script_dir, 'test_data', 'test_methylome.tsv')
-        atlas = os.path.join(script_dir, 'test_data', 'test_atlas.tsv')
         cell_type_proportions = deconvolute(methylome, atlas, 'llsp')
 
         # check that the cell_type proportion values are close
         self.assertAlmostEqual(cell_type_proportions['cell1'], 0.7, places=1)
 
     def test_mmse(self):
-        methylome = os.path.join(script_dir, 'test_data', 'test_methylome.tsv')
-        atlas = os.path.join(script_dir, 'test_data', 'test_atlas.tsv')
         cell_type_proportions = deconvolute(methylome, atlas, 'mmse')
 
         # check that the cell_type proportion values are close

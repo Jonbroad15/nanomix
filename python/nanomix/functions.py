@@ -93,7 +93,7 @@ def evaluate(methylome, atlas, model,
         accuracy = sum([1 if true_assignment == assignment else 0 for true_assignment, assignment in zip(true_assignments, assignments)]) / len(assignments)
         print(f"Accuracy at confidence {threshold}: {accuracy}")
 
-def deconvolute(methylome, atlas_path, model,
+def deconvolute(methylome, atlas, model,
                 p01=0.,
                 p11=1.,
                 sigma_init='null',
@@ -119,11 +119,11 @@ def deconvolute(methylome, atlas_path, model,
 
     # Run
     if model == 'mmse':
-        sigma = fit_model(methylome, atlas_path, sigma_init, p01, p11)
-        cell_type_proportions = fit_mmse(atlas_path, methylome, sigma, p01, p11, stop_thresh, max_iter, min_proportion)
+        sigma = fit_model(methylome, atlas, sigma_init, p01, p11)
+        cell_type_proportions = fit_mmse(atlas, methylome, sigma, p01, p11, stop_thresh, max_iter, min_proportion)
     else:
-        sigma = fit_model(methylome, atlas_path, model, p01, p11)
-        cell_type_proportions = {cell_type: proportion for cell_type, proportion in zip(atlas.get_cell_types(), sigma)}
+        sigma = fit_model(methylome, atlas, model, p01, p11)
+        cell_type_proportions = {cell_type: proportion for cell_type, proportion in zip(get_cell_types(atlas), sigma)}
 
     # return deconvolution results
     if print_output:
@@ -134,6 +134,7 @@ def deconvolute(methylome, atlas_path, model,
     return cell_type_proportions
 
 def assign_fragments(methylome, atlas, sigma,
+                     p01=0., p11=1.,
                      threshold=0.5,
                      print_output=True):
     """
