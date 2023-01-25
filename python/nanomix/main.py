@@ -59,7 +59,7 @@ Deconvolution Models:
                         effect of sequencing errors on deconvolution loss and accuracy.
 """)
     parser_deconvolute.add_argument('methylome', help='Path to methylome tsv file with columns: {chr, start, end, total_calls, modified_calls}')
-    parser_deconvolute.add_argument('-a', '--atlas', type=str, default=BISULFITE_ATLAS, help='Path to reference atlas')
+    parser_deconvolute.add_argument('-a', '--atlas', required=True, type=str, default=BISULFITE_ATLAS, help='Path to reference atlas')
     parser_deconvolute.add_argument('-p01', default=0.05, type=float, help='Sequencing miscall rate')
     parser_deconvolute.add_argument('-p11', default=0.95, type=float, help='Sequencing correct call rate')
     parser_deconvolute.add_argument('-m', '--model', default='llse', type=str, help='Deconvolution model options: [nnls, llse, llsp, mmse]')
@@ -87,7 +87,7 @@ Methylome: A tsv file containing the methylome to be deconvoluted. The file must
 The simulate function can be used to create this file.
 """)
     parser_evaluate.add_argument('methylome', help='Path to methylome tsv file with columns: {chr, start, end, total_calls, modified_calls, cell_type}')
-    parser_evaluate.add_argument('-a', '--atlas', type=str, default=BISULFITE_ATLAS, help='Path to reference atlas')
+    parser_evaluate.add_argument('-a', '--atlas', required=True, type=str, default=BISULFITE_ATLAS, help='Path to reference atlas')
     parser_evaluate.add_argument('-p01', default=0.05, type=float, help='Sequencing miscall rate')
     parser_evaluate.add_argument('-p11', default=0.95, type=float, help='Sequencing correct call rate')
     parser_evaluate.add_argument('-m', '--model', default='llse', type=str, help='Deconvolution model options: [nnls, llse, llsp, mmse]')
@@ -101,7 +101,7 @@ Sigma: A tsv file containing the cell-type mixture proportions. The file must co
     proportion:         float between 0 and 1
 """)
     parser_simulate.add_argument('sigma', type=str, help='Path to sigma tsv file')
-    parser_simulate.add_argument('-a', '--atlas', type=str, default=BISULFITE_ATLAS, help='Path to reference atlas')
+    parser_simulate.add_argument('-a', '--atlas', required=True, type=str, default=BISULFITE_ATLAS, help='Path to reference atlas')
     parser_simulate.add_argument('-p01', default=0.05, type=float, help='Sequencing miscall rate')
     parser_simulate.add_argument('-p11', default=0.95, type=float, help='Sequencing correct call rate')
     parser_simulate.add_argument('-c', '--coverage', default=1, type=float, help='Sequencing coverage')
@@ -122,7 +122,7 @@ Methylome:  A tsv file containing the methylome to be deconvoluted. The file mus
 The simulate function can be used to create this file.
 """)
     parser_assign.add_argument('methylome', help='Path to methylome tsv file with columns: {chr, start, end, total_calls, modified_calls}')
-    parser_assign.add_argument('-a', '--atlas', type=str, default=BISULFITE_ATLAS, help='Path to reference atlas')
+    parser_assign.add_argument('-a', '--atlas', required=True, type=str, default=BISULFITE_ATLAS, help='Path to reference atlas')
     parser_assign.add_argument('-p01', default=0.05, type=float, help='Sequencing miscall rate')
     parser_assign.add_argument('-p11', default=0.95, type=float, help='Sequencing correct call rate')
     parser_assign.add_argument('-s', '--sigma', required=True, type=str, help='Path to sigma tsv file')

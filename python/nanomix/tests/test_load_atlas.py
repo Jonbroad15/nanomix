@@ -10,6 +10,7 @@ sys.path.append(parent_dir)
 
 from tools import *
 
+script_dir = os.path.dirname(os.path.realpath(__file__))
 methylome = os.path.join(script_dir, 'test_data', 'test_methylome.tsv')
 atlas = os.path.join(script_dir, 'test_data', 'test_atlas.tsv')
 sigma_path = os.path.join(script_dir, 'test_data', 'test_sigma.tsv')

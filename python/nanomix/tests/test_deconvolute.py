@@ -10,6 +10,7 @@ sys.path.append(parent_dir)
 
 from main import *
 
+script_dir = os.path.dirname(os.path.realpath(__file__))
 methylome = os.path.join(script_dir, 'test_data', 'test_methylome.tsv')
 atlas = os.path.join(script_dir, 'test_data', 'test_atlas.tsv')
 sigma_path = os.path.join(script_dir, 'test_data', 'test_sigma.tsv')
@@ -17,11 +18,11 @@ sigma_path = os.path.join(script_dir, 'test_data', 'test_sigma.tsv')
 class TestMain(unittest.TestCase):
 
     @classmethod
-    def setUpClass(cls):
-        # Write sigma
+    def setupclass(cls):
+        # write sigma
         sigma = [0.3, 0.7]
         coverage = 100
-        # Write an atlas
+        # write an atlas
         with open(atlas, 'w') as f:
             f.write('chr\tstart\tend')
             for i in range(len(sigma)):
@@ -35,7 +36,7 @@ class TestMain(unittest.TestCase):
                     else:
                         f.write('\t0.01')
                 f.write('\n')
-        # Simulate a methylome
+        # simulate a methylome
         with open(methylome, 'w') as f:
             f.write('chr\tstart\tend\ttotal_calls\tmodified_calls\n')
             for i in range(len(sigma)):
@@ -49,7 +50,7 @@ class TestMain(unittest.TestCase):
                         f.write(f'chr1\t{i*100}\t{i*100+99}\t1\t0\n')
 
     def test_llse(self):
-        # Test deconvolute function
+        # test deconvolute function
         cell_type_proportions = deconvolute(methylome, atlas, 'llse')
 
         # check that the cell_type proportion values are close

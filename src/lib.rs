@@ -142,16 +142,26 @@ impl MMSE {
         // Make a struct for reads
         let mut methylome_reader = csv::ReaderBuilder::new().delimiter(b'\t').from_path(methylome).expect("Could not open bed file");
 
+        // get header from methylome reader
+        let header = methylome_reader.headers().unwrap();
+        // Map header to index
+        let header_map = header.iter().enumerate().map(|(i, x)| (x.to_string(), i)).collect::<HashMap<String, usize>>();
+        // get the index of the columns we need
+        let chr_idx = header_map.get("chr").unwrap();
+        let start_idx = header_map.get("start").unwrap();
+        let end_idx = header_map.get("end").unwrap();
+        let m_idx = header_map.get("modified_calls").unwrap();
+        let t_idx = header_map.get("total_calls").unwrap();
         // this stores the methylome data for each interval
         let mut methylome_data = Vec::new();
         for r in methylome_reader.records() {
             let record = r.expect("Could not parse bed record");
             let read = Read {
-                chr: record[0].to_string(),
-                start: record[1].parse().unwrap(),
-                end: record[2].parse().unwrap(),
-                t: record[3].parse().unwrap(),
-                m: record[4].parse().unwrap(),
+                chr: record[*chr_idx].to_string(),
+                start: record[*start_idx].parse().unwrap(),
+                end: record[*end_idx].parse().unwrap(),
+                t: record[*t_idx].parse().unwrap(),
+                m: record[*m_idx].parse().unwrap(),
             };
             methylome_data.push(read);
         }
