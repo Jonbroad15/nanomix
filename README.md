@@ -30,10 +30,6 @@ Then the mixture proportion can be found by calling:
 nanomix deconvolute -a ATLAS.tsv METHYLOME.tsv
 ```
 
-```
-nanomix deconvolute <METHYLOME> -a <ATLAS>
-```
-
 ### Model
 We provide four deconvolution models
 
