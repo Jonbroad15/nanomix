@@ -30,16 +30,12 @@ Then the mixture proportion can be found by calling:
 nanomix deconvolute -a ATLAS.tsv METHYLOME.tsv
 ```
 
-```
-nanomix deconvolute <METHYLOME> -a <ATLAS>
-```
-
 ### Model
 We provide four deconvolution models
 
-- **llse (default):**   log-likelihood with sequencing errors. Maximize the likelihood of the methylome, atlas and sigma
+- **llse (default):**   log-likelihood with sequencing errors. Maximize the likelihood of sigma
                     by assuming modification calls follow a binomial distribution. Good for sequencing data with high error
-                    rate and non-uniform coverage distribution. (Oxford Nanopore)
+                    rate. (Oxford Nanopore)
 - **nnls:**             non-negative least squares. Minimize the squared error between the methylome and what we expect for
                     the methylome (given sigma and the atlas). Recommended for fast deconvolution of methylomes with high
                     coverage. (Methylation Arrays)
@@ -52,7 +48,7 @@ Select a model by:
 ```
 nanomix deconvolute -m MODEL METHYLOME.tsv 
 ```
-The mmse model is distinct in that it works by assigning reads to cell types. To this effect, one would need a methylome where every row represents a read and columns contain `{read_id, chr, start, end, total_calls, modified_calls}`, this also be constructed from a `.bam` file with [mbtools](https://github.com/jts/mbtools)
+The **mmse model is distinct** in that it works by assigning reads to cell types. To this effect, one would need a methylome where every row represents a read and columns contain `{read_id, chr, start, end, total_calls, modified_calls}`, this also be constructed from a `.bam` file with [mbtools](https://github.com/jts/mbtools)
 ```
 mbtools read-frequency SAMPLE.bam > METHYLOME.tsv
 nanomix deconvolute -m mmse METHYLOME.tsv
@@ -70,13 +66,13 @@ nanomix assign -s SIGMA.tsv METHYLOME.tsv
 ### Simulate 
 We provide functionality to simulate methylomes of complex cell mixtures given a `sigma.tsv` file that indicates the cell\_type in the first column and the corresponding proportion in the second column. All the proportions must add up to 1 and the cell-types must be the same as those in the supplied reference atlas. To simulate a methylome:
 ```
-nanomix simulate SIGMA.tsv
+nanomix simulate -a ATLAS.tsv SIGMA.tsv
 ```
 
 ### Evaluate
 Simulating data provides true cell-type assignments in the last column of the methylome. We can evaluate the performance of a models deconvolution on this methylome. This will output the deconvolution loss (euclidean distance between true and predicted sigma vector) and the read assignment accuracy at confidence levels from 0.5 to 0.9.
 ```
-nanomix evaluate METHYLOME.tsv
+nanomix evaluate -a ATLAS.tsv METHYLOME.tsv
 ```
 
 
