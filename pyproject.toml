@@ -11,7 +11,7 @@ keywords = ["nanopore", "methylation", "deconvolution"]
 authors = [ { name = "Jonathan Broadbent", email = "jonbroad15@gmail.com" },
             { name = "Jared Simpson", email = "jsimpson@oicr.on.ca" } ]
 maintainers = [ { name = "Jonathan Broadbent", email = "jonbroad15@gmail.com" } ]
-dependencies = ["pandas~=1.5.2", "pyranges==0.0.120", "numpy~=1.24.1", "scipy~=1.10.0"]
+dependencies = ["pandas~=1.5.2", "pyranges==0.0.120", "numpy~=1.24.1", "scipy~=1.10.0", "matplotlib", "ray"]
 requires-python = ">=3.7"
 classifiers = [
     "Programming Language :: Rust",

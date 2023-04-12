@@ -75,6 +75,12 @@ Simulating data provides true cell-type assignments in the last column of the me
 nanomix evaluate -a ATLAS.tsv METHYLOME.tsv
 ```
 
+### Plot
+You can plot a list of deconvolution mixtures by providing them to the plot function. This will produce a stacked bar plot.
+```
+nanomix plot -o NAME.png *sigma.tsv
+```
+![exampledeconvplot](Images/example_deconvolution_plot.png)
 
 
 
