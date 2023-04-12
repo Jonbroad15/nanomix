@@ -6,6 +6,7 @@ script_dir = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(script_dir)
 
 from functions import *
+from plot import plot_mixture_proportions
 BISULFITE_ATLAS = os.path.join(script_dir, '..', '..', 'atlases', '39Bisulfite.tsv')
 
 def main():
@@ -60,13 +61,17 @@ Deconvolution Models:
 """)
     parser_deconvolute.add_argument('methylome', help='Path to methylome tsv file with columns: {chr, start, end, total_calls, modified_calls}')
     parser_deconvolute.add_argument('-a', '--atlas', required=True, type=str, default=BISULFITE_ATLAS, help='Path to reference atlas')
-    parser_deconvolute.add_argument('-p01', default=0.05, type=float, help='Sequencing miscall rate')
-    parser_deconvolute.add_argument('-p11', default=0.95, type=float, help='Sequencing correct call rate')
+    parser_deconvolute.add_argument('-p01', default=0.05, help='Sequencing miscall rate')
+    parser_deconvolute.add_argument('-p11', default=0.95, help='Sequencing correct call rate')
     parser_deconvolute.add_argument('-m', '--model', default='llse', type=str, help='Deconvolution model options: [nnls, llse, llsp, mmse]')
-    parser_deconvolute.add_argument('-i', '--sigma_init', default='null', type=str, help='Initalize sigma with one of the other models (mmse only)')
-    parser_deconvolute.add_argument('-n', '--max_iter', default=100, type=int, help='Maximum number of iterations for the EM optimization (mmse only)')
+    parser_deconvolute.add_argument('-@', '--threads', default=1, type=int, help='Number of threads to use')
+    parser_deconvolute.add_argument('-nt', '--n_trials', default=3, type=int, help='Number of trials to run')
+    parser_deconvolute.add_argument('--nnls_init' , action='store_true', help='Initialize nnls with llse')
+    parser_deconvolute.add_argument('--concentration', type=float, help='Concentration parameter for Dirichlet prior')
+    parser_deconvolute.add_argument('-i', '--sigma_init', default='null', type=str, help='Initalize sigma with a tsv file')
+    parser_deconvolute.add_argument('-n', '--max_iter', default=200, type=int, help='Maximum number of iterations for the EM optimization (mmse only)')
     parser_deconvolute.add_argument('-p', '--min_proportion', default=0.01, type=float, help='Minimum proportion of a cell type to be considered (mmse only)')
-    parser_deconvolute.add_argument('-t', '--stop_thresh', default=1e-3, type=float, help='Stop EM iterations when percent change in log-likelihood falls below this value (mmse only)')
+    parser_deconvolute.add_argument('-t', '--stop_thresh', default=1e-5, type=float, help='Stop EM iterations when percent change in log-likelihood falls below this value (mmse only)')
     parser_deconvolute.set_defaults(func=deconvolute)
 
     parser_evaluate = subparsers.add_parser('evaluate', formatter_class=argparse.RawDescriptionHelpFormatter, description="""
@@ -86,11 +91,11 @@ Methylome: A tsv file containing the methylome to be deconvoluted. The file must
     cell_type:          String identifier of cell_type that matches that in the atlas header
 The simulate function can be used to create this file.
 """)
-    parser_evaluate.add_argument('methylome', help='Path to methylome tsv file with columns: {chr, start, end, total_calls, modified_calls, cell_type}')
+    parser_evaluate.add_argument('methylome', help='Path to methylome tsv file with columns: {read_name, chr, start_position, end_position, total_calls, modified_calls, cell_type}')
     parser_evaluate.add_argument('-a', '--atlas', required=True, type=str, default=BISULFITE_ATLAS, help='Path to reference atlas')
+    parser_evaluate.add_argument('-s', '--sigma', type=str, help='Path to sigma tsv file')
     parser_evaluate.add_argument('-p01', default=0.05, type=float, help='Sequencing miscall rate')
     parser_evaluate.add_argument('-p11', default=0.95, type=float, help='Sequencing correct call rate')
-    parser_evaluate.add_argument('-m', '--model', default='llse', type=str, help='Deconvolution model options: [nnls, llse, llsp, mmse]')
     parser_evaluate.set_defaults(func=evaluate)
 
     parser_simulate = subparsers.add_parser('simulate', formatter_class=argparse.RawDescriptionHelpFormatter, description="""
@@ -127,6 +132,34 @@ The simulate function can be used to create this file.
     parser_assign.add_argument('-p11', default=0.95, type=float, help='Sequencing correct call rate')
     parser_assign.add_argument('-s', '--sigma', required=True, type=str, help='Path to sigma tsv file')
     parser_assign.set_defaults(func=assign_fragments)
+
+    parser_plot = subparsers.add_parser('plot', formatter_class=argparse.RawDescriptionHelpFormatter, description="""
+Plot the results of a deconvolution into a stacked bar chart.
+
+Provide a list of sigma files to combine plots into one chart
+Sigma: A tsv file containing the cell-type mixture proportions. The file must contain the following columns:
+    cell_type:          String identifier of cell_type that matches that in the atlas header
+    proportion:         float between 0 and 1
+""")
+    parser_plot.add_argument('sigma', nargs='+', type=str, help='Path to sigma tsv files')
+    parser_plot.add_argument('-o', '--outpath', type=str, help='Name of the plot')
+    parser_plot.add_argument('-l', '--group_lung', action='store_true', help='Group lung cell types into one category')
+    parser_plot.add_argument('-c', '--chart', type=str, default='bar', help='Chart type: [bar, scatter]')
+    parser_plot.add_argument('-ct', '--cell_types', nargs='+', type=str, help='List of cell types to plot')
+    parser_plot.set_defaults(func=plot)
+
+    parser_ll = subparsers.add_parser('ll', formatter_class=argparse.RawDescriptionHelpFormatter, description="""
+Compute the log-likelihood of a given methylome given a cell-type mixture (sigma).
+""")
+    parser_ll.add_argument('methylome', help='Path to methylome tsv file with columns: {chr, start, end, total_calls, modified_calls}')
+    parser_ll.add_argument('-a', '--atlas', required=True, type=str, default=BISULFITE_ATLAS, help='Path to reference atlas')
+    parser_ll.add_argument('-m', '--model', default='llse', type=str, help='Deconvolution model options: [llse, llsp, mmse]')
+    parser_ll.add_argument('-p01', default=0.05, type=float, help='Sequencing miscall rate')
+    parser_ll.add_argument('-p11', default=0.95, type=float, help='Sequencing correct call rate')
+    parser_ll.add_argument('-s', '--sigma', required=True, type=str, help='Path to sigma tsv file')
+    parser_ll.set_defaults(func=log_likelihood)
+
+
 
     args = parser.parse_args()
     arg_dict = {k : v for k, v in vars(args).items() if k not in ['func','command']}
