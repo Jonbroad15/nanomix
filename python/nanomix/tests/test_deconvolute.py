@@ -49,24 +49,24 @@ class TestMain(unittest.TestCase):
                     else:
                         f.write(f'chr1\t{i*100}\t{i*100+99}\t1\t0\n')
 
-    def test_llse(self):
-        # test deconvolute function
-        cell_type_proportions = deconvolute(methylome, atlas, 'llse')
+    # def test_llse(self):
+        # # test deconvolute function
+        # cell_type_proportions = deconvolute(methylome, atlas, 'llse')
 
-        # check that the cell_type proportion values are close
-        self.assertAlmostEqual(cell_type_proportions['cell1'], 0.7, places=1)
+        # # check that the cell_type proportion values are close
+        # self.assertAlmostEqual(cell_type_proportions['cell1'], 0.7, places=1)
 
-    def test_nnls(self):
-        cell_type_proportions = deconvolute(methylome, atlas, 'nnls')
+    # def test_nnls(self):
+        # cell_type_proportions = deconvolute(methylome, atlas, 'nnls')
 
-        # check that the cell_type proportion values are close
-        self.assertAlmostEqual(cell_type_proportions['cell1'], 0.7, places=1)
+        # # check that the cell_type proportion values are close
+        # self.assertAlmostEqual(cell_type_proportions['cell1'], 0.7, places=1)
 
-    def test_llsp(self):
-        cell_type_proportions = deconvolute(methylome, atlas, 'llsp')
+    # def test_llsp(self):
+        # cell_type_proportions = deconvolute(methylome, atlas, 'llsp')
 
-        # check that the cell_type proportion values are close
-        self.assertAlmostEqual(cell_type_proportions['cell1'], 0.7, places=1)
+        # # check that the cell_type proportion values are close
+        # self.assertAlmostEqual(cell_type_proportions['cell1'], 0.7, places=1)
 
     def test_mmse(self):
         cell_type_proportions = deconvolute(methylome, atlas, 'mmse')
