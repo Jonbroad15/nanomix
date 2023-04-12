@@ -2,46 +2,28 @@ import csv
 import numpy as np
 import pandas as pd
 import pyranges as pr
-from atlas import ReferenceAtlas, Sample
 
-def load_atlas(atlas_path, methylome):
+
+def get_vectorized_error_param(file, cell_types):
     """
-    Load atlas and methylome data. Perform join on the probes.
-
-    :param atlas: Atlas file path
-    :param methylome: Methylome file path
-    :return: (atlas, sample) tuple
+    # we expect a tsv file with first column cell_type and the second column p01
+    # open the file and read p01 values into a vector, ordered by cell_types in the atlas
+    # order them by cell_types in the atlas
     """
-    # load atlas
-    columns={'chromosome':'Chromosome', 'chr':'Chromosome',
-                            'start':'Start',
-                            'end':'End'}
-    df_atlas = pd.read_csv(atlas_path, sep='\t').rename(columns=columns)
-    df_atlas.drop_duplicates(inplace=True)
-    if 'label' in df_atlas.columns: df_atlas.drop('label', axis=1, inplace=True)
-    df_atlas.dropna(inplace=True)
-    gr_atlas = pr.PyRanges(df_atlas).sort()
-
-    # Read methylomes data from mbtools
     try:
-        df = pd.read_csv(methylome, sep='\t').rename(columns=columns)
-    except pd.errors.EmptyDataError:
-        Exception("Empty methylome file")
-    df.dropna(inplace=True)
-    gr_sample = pr.PyRanges(df).sort()
-
-    # Join atlas and sample
-    gr = gr_atlas.join(gr_sample)
-    # Check for empty upon join
-    if len(gr) == 0:
-        Exception("Empty join between atlas and sample. The sample does not overlap with any regions in the atlas.")
-    atlas = ReferenceAtlas(gr.df.loc[:, gr_atlas.columns])
-    t = np.array(gr.total_calls, dtype=np.float32)
-    m = np.array(gr.modified_calls, dtype=np.float32)
-    xhat = m/t
-    sample = Sample('methylome', xhat, m, t)
-
-    return atlas, sample
+        error_param = float(file)
+        return np.array([error_param]*len(cell_types))
+    except ValueError:
+        with open(file, 'r') as f:
+            # read tsv into a dictionary mapping cell_type to error_param
+            error_param_dict = {row[0]: float(row[1]) for row in csv.reader(f, delimiter='\t')}
+        error_param = []
+        for cell_type in cell_types:
+            if cell_type in error_param_dict:
+                error_param.append(error_param_dict[cell_type])
+            else:
+                error_param.append(error_param_dict['default'])
+        return np.array(error_param)
 
 def eq_constraint(x):
     return 1 - np.sum(x)
@@ -58,4 +40,30 @@ def get_cell_types(atlas):
         header = next(reader)
         cell_types = header[3:]
     return cell_types
+
+def get_sigma_init(sigma, cell_types, concentration=1.):
+    """
+    Get sigma vector from sigma_init file in the same order as the atlas
+
+    :param sigma: path to sigma_init file
+    :param cell_types: vector of cell types in same order as the atlas
+    :return: vector of cell-type proportions
+    """
+    if sigma == 'null':
+        return np.array([concentration] * len(cell_types))
+    else:
+        with open(sigma, 'r') as f:
+            reader = csv.reader(f, delimiter='\t')
+            header = next(reader)
+            cell_type_proportions = {row[0]: float(row[1]) for row in reader}
+        sigma_init = np.array([cell_type_proportions[cell_type] for cell_type in cell_types])
+        return sigma_init
+
+
+
+
+
+
+
+
 
