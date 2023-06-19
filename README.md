@@ -23,7 +23,7 @@ Deconvolution determines the mixture proportion based on methylation propensitie
 ### Deconvolution
 To deconvolute a sequencing run, one must simply provide `nanomix` with a methylome. We define a methylome as a `tsv` file with columns `{chr, start, end, total_calls, modified_calls}`. Such a file can be created from a `.bam` file using our associated program, [mbtools](https://github.com/jts/mbtools)
 ```
-mbtools read-region-frequency -r ATLAS.tsv SAMPLE.bam > METHYLOME.tsv
+mbtools read-region-frequency -r ATLAS.tsv -g REF.fna --cpg SAMPLE.bam > METHYLOME.tsv
 ```
 Then the mixture proportion can be found by calling:
 ```
