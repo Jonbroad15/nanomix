@@ -1,3 +1,5 @@
 target/**
 **.so  
 **pycache**
+paper/
+.DS_Store
