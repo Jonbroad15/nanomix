@@ -8,7 +8,6 @@ from scipy.stats import binom, dirichlet
 from scipy.optimize import minimize, nnls, Bounds
 import os
 import sys
-from multiprocessing import Queue
 import threading
 from functools import partial
 
@@ -136,19 +135,19 @@ class my_thread(threading.Thread):
     """
     thread class for parallel processing of fit_llse
     """
-    def __init__(self, data, p01, p11, queue):
+    def __init__(self, data, p01, p11, initializations):
         super(my_thread, self).__init__()
         self.data = data
         self.p01 = p01
         self.p11 = p11
-        self.queue = queue
+        self.initializations = initializations
         self.res = []
     def run(self):
-        alpha = self.queue.get()
         f = lambda x: -1 * log_likelihood_sequencing_with_errors(self.data, x, self.p01, self.p11)
         bnds = [ (0.0, 1.0) ] * self.data.K
         cons = ({'type': 'eq', 'fun': eq_constraint})
-        self.res.append(minimize(f, alpha, method='SLSQP', options={'maxiter': 200, 'disp':False}, bounds=bnds, constraints=cons))
+        for alpha in self.initializations:
+            self.res.append(minimize(f, alpha, method='SLSQP', options={'maxiter': 200, 'disp':False}, bounds=bnds, constraints=cons))
 
 
 def fit_llse_parallel(data, p01, p11, n_trials, threads, concentration, init_nnls):
@@ -157,11 +156,11 @@ def fit_llse_parallel(data, p01, p11, n_trials, threads, concentration, init_nnl
     if init_nnls:
         initializations.append(fit_nnls(data))
 
-    queues = [Queue() for i in range(threads)]
     res = []
-    for i in range(n_trials):
-        queues[i % threads].put(initializations[i])
-    threads = [my_thread(data, p01, p11, queues[i]) for i in range(threads)]
+    # Deal every initialization out across the workers -- including the
+    # --nnls_init vector appended above, which lives at index n_trials.
+    chunks = [initializations[i::threads] for i in range(threads)]
+    threads = [my_thread(data, p01, p11, chunks[i]) for i in range(threads)]
     for t in threads:
         t.start()
     for t in threads:
